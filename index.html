@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HEEP — לוח קנבן + סימולטור Homopolar</title>
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="HEEP">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <script>
+    // Force reload when app version changes
+    const _V = '20260609-004';
+    if (localStorage.getItem('_hv') !== _V) {
+      const first = !localStorage.getItem('_hv');
+      localStorage.setItem('_hv', _V);
+      if (!first) window.location.reload(true);
+    }
+    if ('serviceWorker' in navigator)
+      navigator.serviceWorker.register('sw.js');
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <style>
+    /* ══════════════════════════════════════════════════════
+       TEAMBOARD / KANBAN — Light theme
+    ══════════════════════════════════════════════════════ */
+    :root {
+      --bg:         #f1f5f9;
+      --surface:    #ffffff;
+      --surface2:   #f8fafc;
+      --border:     #e2e8f0;
+      --primary:    #6366f1;
+      --primary-lt: #eef2ff;
+      --success:    #10b981;
+      --warning:    #f59e0b;
+      --danger:     #ef4444;
+      --text:       #1e293b;
+      --text2:      #475569;
+      --text3:      #94a3b8;
+      --shadow:     0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      --shadow-lg:  0 8px 32px rgba(0,0,0,.14);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      direction: rtl;
+      overflow-x: hidden;
+    }
+
+    /* ── App Header ── */
+    .app-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px;
+      flex-shrink: 0;
+      position: sticky; top: 0; z-index: 300;
+    }
+
+    .app-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 17px; font-weight: 700; color: var(--text);
+    }
+    .logo-icon {
+      padding: 5px 12px; background: #2563eb;
+      border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; color: white; font-size: 15px; font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    .app-tabs { display: flex; gap: 4px; }
+    .app-tab {
+      padding: 7px 16px; border-radius: 8px; border: none;
+      background: transparent; color: var(--text2);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all .15s;
+      display: flex; align-items: center; gap: 6px;
+      font-family: inherit;
+    }
+    .app-tab:hover  { background: var(--bg); color: var(--text); }
+    .app-tab.active { background: var(--primary-lt); color: var(--primary); }
+
+    /* header-top = logo + tabs wrapper; on desktop they sit as one flex item */
+    .app-header-top {
+      display: flex; align-items: center; gap: 16px;
+    }
+
+    .member-legend { display: flex; gap: 8px; flex-wrap: wrap; }
+    .member-chip {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 20px;
+      border: 1.5px solid var(--border);
+      font-size: 11px; font-weight: 700; color: var(--text2);
+      cursor: pointer; transition: all .15s; user-select: none;
+    }
+    .member-chip:hover   { border-color: var(--text3); color: var(--text); }
+    .member-chip.active  { color: white; border-color: transparent; }
+    .member-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* ── Tab panels ── */
+    .tab-panel          { display: none !important; }
+    .tab-panel.active   { display: block !important; }
+    #panel-sim.active   { display: flex !important; }  /* override block → flex for sim */
+
+    /* ── Toolbar ── */
+    .kanban-toolbar {
+      padding: 16px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .kanban-title { font-size: 20px; font-weight: 700; }
+
+    .btn {
+      padding: 8px 16px; border-radius: 8px; border: none;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all .15s;
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: inherit;
+    }
+    .btn-primary       { background: var(--primary); color: white; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-ghost         { background: transparent; color: var(--text2); border: 1.5px solid var(--border); }
+    .btn-ghost:hover   { background: var(--bg); color: var(--text); }
+
+    /* ── Monday.com Board ── */
+    .monday-board {
+      display: flex; flex-direction: column; gap: 16px;
+      padding: 0 24px 40px;
+      overflow-y: auto; flex: 1;
+    }
+
+    .monday-group {
+      border-radius: 10px; overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    /* colored accent on the right (RTL start side) */
+    .monday-group[data-col="todo"]       .monday-gh { border-right: 4px solid #64748b; }
+    .monday-group[data-col="inprogress"] .monday-gh { border-right: 4px solid #6366f1; }
+    .monday-group[data-col="review"]     .monday-gh { border-right: 4px solid #f59e0b; }
+    .monday-group[data-col="done"]       .monday-gh { border-right: 4px solid #10b981; }
+
+    .monday-gh {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 14px; height: 44px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+    .monday-gh-arrow {
+      font-size: 9px; color: var(--text3); cursor: pointer;
+      transition: transform .2s; flex-shrink: 0; display: inline-block;
+    }
+    .monday-gh-arrow.collapsed { transform: rotate(-90deg); }
+    .monday-gh-dot  { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+    .monday-gh-name { font-size: 14px; font-weight: 700; color: var(--text); }
+    .monday-gh-cnt  {
+      font-size: 11px; font-weight: 700; color: var(--text3);
+      background: var(--bg); padding: 1px 7px; border-radius: 10px;
+    }
+    .monday-gh-spacer { flex: 1; }
+    .monday-gh-add {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12px; font-weight: 600; color: var(--text3);
+      background: none; border: none; cursor: pointer;
+      padding: 4px 9px; border-radius: 6px; transition: all .15s; font-family: inherit;
+    }
+    .monday-gh-add:hover { background: var(--primary-lt); color: var(--primary); }
+
+    .monday-col-hdr {
+      display: grid;
+      grid-template-columns: 1fr 90px 105px 95px 120px;
+      padding: 0 14px; height: 30px; align-items: center;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      font-size: 10px; font-weight: 700; color: var(--text3); letter-spacing: .5px;
+    }
+
+    .monday-rows { min-height: 4px; }
+    .monday-rows.drag-over { background: var(--primary-lt); }
+
+    .monday-row {
+      display: grid;
+      grid-template-columns: 1fr 90px 105px 95px 120px;
+      padding: 0 14px; min-height: 44px; align-items: center;
+      border-bottom: 1px solid var(--border);
+      transition: background .1s; position: relative;
+      cursor: grab; user-select: none;
+    }
+    .monday-row:last-child { border-bottom: none; }
+    .monday-row:hover { background: #f8faff; }
+    .monday-row.dragging { opacity: .4; cursor: grabbing; }
+
+    .monday-row-name { padding: 8px 0; min-width: 0; }
+    .monday-row-title {
+      font-size: 13px; font-weight: 600; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .monday-row-sub {
+      font-size: 11px; color: var(--text3); margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .monday-row-members { display: flex; align-items: center; gap: 0; }
+    .monday-avatar {
+      width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: white; flex-shrink: 0;
+      border: 2px solid white; margin-left: -5px;
+    }
+    .monday-row-members .monday-avatar:last-child { margin-left: 0; }
+
+    .monday-pri-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 3px 10px; border-radius: 5px;
+      font-size: 11px; font-weight: 700; gap: 4px; white-space: nowrap;
+    }
+    .pri-high   { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
+    .pri-medium { background: #fffbeb; color: #f59e0b; border: 1px solid #fde68a; }
+    .pri-low    { background: #f0fdf4; color: #10b981; border: 1px solid #a7f3d0; }
+
+    .monday-row-tags { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+    .card-tag { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+
+    .monday-row-actions {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      left: 10px; display: none; gap: 4px;
+      background: var(--surface); padding: 2px 4px; border-radius: 7px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.10); z-index: 10;
+    }
+    .monday-row:hover .monday-row-actions { display: flex; }
+    .card-action-btn {
+      width: 26px; height: 26px; border: none; background: var(--bg);
+      border-radius: 6px; cursor: pointer; font-size: 12px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s;
+    }
+    .card-action-btn:hover { background: var(--border); }
+
+    .monday-add-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 14px; font-size: 12px; color: var(--text3);
+      cursor: pointer; transition: background .1s; border-top: 1px solid var(--border);
+    }
+    .monday-add-row:hover { background: var(--bg); color: var(--primary); }
+
+    .date-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px; border-radius: 5px;
+      font-size: 11px; font-weight: 700; white-space: nowrap;
+    }
+    .date-future  { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
+    .date-today   { background: #fff7ed; color: #f97316; border: 1px solid #fed7aa; }
+    .date-overdue { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
+    .meeting-badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 7px; border-radius: 5px; font-size: 10px; font-weight: 600;
+      background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe;
+      white-space: nowrap;
+    }
+
+    /* ── Modal ── */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(15,23,42,.5); z-index: 1000;
+      align-items: center; justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      background: var(--surface); border-radius: 20px;
+      width: 480px; max-width: 95vw;
+      box-shadow: var(--shadow-lg); overflow: hidden;
+      animation: modalIn .18s ease;
+    }
+    @keyframes modalIn {
+      from { transform: scale(.96) translateY(8px); opacity: 0; }
+      to   { transform: scale(1)   translateY(0);   opacity: 1; }
+    }
+
+    .modal-header {
+      padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title  { font-size: 17px; font-weight: 700; }
+    .modal-close  {
+      background: none; border: none; font-size: 18px; color: var(--text3);
+      cursor: pointer; width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; transition: background .15s;
+    }
+    .modal-close:hover { background: var(--bg); }
+
+    .modal-body   { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; max-height: 68vh; overflow-y: auto; overflow-x: hidden; }
+    .modal-footer { padding: 16px 24px; display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid var(--border); }
+
+    .form-group   { display: flex; flex-direction: column; gap: 6px; }
+    .form-label   { font-size: 12px; font-weight: 700; color: var(--text2); }
+    .form-input, .form-textarea, .form-select {
+      padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+      font-size: 13px; color: var(--text); background: var(--surface);
+      font-family: inherit; direction: rtl; outline: none; transition: border-color .15s; width: 100%;
+    }
+    .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--primary); }
+    .form-textarea { resize: vertical; min-height: 72px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .priority-picker { display: flex; gap: 8px; }
+    .priority-option {
+      flex: 1; padding: 8px; border: 2px solid var(--border); border-radius: 10px;
+      cursor: pointer; text-align: center; font-size: 12px; font-weight: 700; transition: all .15s;
+    }
+    .priority-option:hover           { border-color: var(--text3); }
+    .priority-option.high            { color: var(--danger); }
+    .priority-option.high.selected   { border-color: var(--danger);  background: #fef2f2; }
+    .priority-option.medium          { color: var(--warning); }
+    .priority-option.medium.selected { border-color: var(--warning); background: #fffbeb; }
+    .priority-option.low             { color: var(--success); }
+    .priority-option.low.selected    { border-color: var(--success); background: #f0fdf4; }
+
+    .assignee-picker { display: flex; gap: 8px; }
+    .assignee-option {
+      flex: 1; padding: 8px; border: 2px solid var(--border); border-radius: 10px;
+      cursor: pointer; text-align: center; transition: all .15s;
+    }
+    .assignee-option:hover    { border-color: var(--text3); }
+    .assignee-option.selected { border-color: var(--primary); background: var(--primary-lt); box-shadow: 0 0 0 3px var(--primary-lt); }
+    .assignee-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: white; margin: 0 auto 4px;
+    }
+    .assignee-name { font-size: 10px; font-weight: 600; color: var(--text2); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+    /* ══════════════════════════════════════════════════════
+       SIMULATOR PANEL — light theme (matches task board)
+    ══════════════════════════════════════════════════════ */
+
+    #panel-sim.active {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 60px);
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      direction: ltr;
+    }
+
+    /* ── Homopolar Tailwind utilities (inline replacement) ── */
+    #panel-sim .min-h-screen{min-height:100vh}
+    #panel-sim .flex{display:flex}
+    #panel-sim .inline-flex{display:inline-flex}
+    #panel-sim .grid{display:grid}
+    #panel-sim .block{display:block}
+    #panel-sim .flex-col{flex-direction:column}
+    #panel-sim .flex-1{flex:1 1 0%}
+    #panel-sim .flex-wrap{flex-wrap:wrap}
+    #panel-sim .items-center{align-items:center}
+    #panel-sim .justify-center{justify-content:center}
+    #panel-sim .justify-between{justify-content:space-between}
+    #panel-sim .gap-2{gap:.5rem}
+    #panel-sim .gap-3{gap:.75rem}
+    #panel-sim .gap-6{gap:1.5rem}
+    #panel-sim .overflow-hidden{overflow:hidden}
+    #panel-sim .overflow-y-auto{overflow-y:auto}
+    #panel-sim .w-8{width:2rem}
+    #panel-sim .h-8{height:2rem}
+    #panel-sim .w-full{width:100%}
+    #panel-sim .min-w-0{min-width:0}
+    #panel-sim .min-h-0{min-height:0}
+    #panel-sim .p-4{padding:1rem}
+    #panel-sim .px-2{padding-left:.5rem;padding-right:.5rem}
+    #panel-sim .px-6{padding-left:1.5rem;padding-right:1.5rem}
+    #panel-sim .py-3{padding-top:.75rem;padding-bottom:.75rem}
+    #panel-sim .mt-2{margin-top:.5rem}
+    #panel-sim .mt-4{margin-top:1rem}
+    #panel-sim .border{border:1px solid}
+    #panel-sim .border-b{border-bottom:1px solid}
+    #panel-sim .border-r{border-right:1px solid}
+    #panel-sim .border-l{border-left:1px solid}
+    #panel-sim .border-t{border-top:1px solid}
+    #panel-sim .border-gray-800{border-color:#e2e8f0}
+    #panel-sim .bg-blue-600{background-color:#2563eb}
+    #panel-sim .text-white{color:#fff}
+    #panel-sim .text-sm{font-size:.875rem;line-height:1.25rem}
+    #panel-sim .text-xs{font-size:.75rem;line-height:1rem}
+    #panel-sim .text-lg{font-size:1.125rem;line-height:1.75rem}
+    #panel-sim .text-xl{font-size:1.25rem;line-height:1.75rem}
+    #panel-sim .font-bold{font-weight:700}
+    #panel-sim .font-semibold{font-weight:600}
+    #panel-sim .font-black{font-weight:900}
+    #panel-sim .font-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    #panel-sim .text-gray-400{color:#64748b}
+    #panel-sim .text-gray-500{color:#94a3b8}
+    #panel-sim .text-gray-300{color:#475569}
+    #panel-sim .text-blue-400{color:#60a5fa}
+    #panel-sim .text-green-400{color:#4ade80}
+    #panel-sim .text-green-300{color:#86efac}
+    #panel-sim .text-red-400{color:#f87171}
+    #panel-sim .text-yellow-400{color:#facc15}
+    #panel-sim .text-yellow-300{color:#fde047}
+    #panel-sim .rounded-full{border-radius:9999px}
+    #panel-sim .rounded-lg{border-radius:.5rem}
+    #panel-sim .cursor-pointer{cursor:pointer}
+    #panel-sim .accent-green-500{accent-color:#22c55e}
+    #panel-sim .grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+    #panel-sim .col-span-2{grid-column:span 2/span 2}
+    #panel-sim .animate-pulse{animation:sim-pulse 2s cubic-bezier(.4,0,.6,1) infinite}
+    @keyframes sim-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+    /* ── Homopolar custom styles (scoped) ── */
+    #panel-sim ::-webkit-scrollbar{width:6px}
+    #panel-sim ::-webkit-scrollbar-track{background:#f1f5f9}
+    #panel-sim ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+
+    #panel-sim .param-input {
+      background:#fff;border:1px solid #e2e8f0;color:#1e293b;
+      border-radius:6px;padding:4px 8px;width:100%;font-size:13px;transition:border-color .2s;
+    }
+    #panel-sim .param-input:focus{outline:none;border-color:#6366f1}
+    #panel-sim .param-input:hover{border-color:#94a3b8}
+
+    #panel-sim .section-hdr {
+      font-size:11px;font-weight:700;letter-spacing:1px;
+      color:#64748b;text-transform:uppercase;margin:14px 0 6px;
+      padding-bottom:4px;border-bottom:1px solid #e2e8f0;
+    }
+
+    #panel-sim .res-row {
+      display:flex;justify-content:space-between;align-items:center;
+      padding:5px 8px;border-radius:6px;margin-bottom:3px;
+    }
+    #panel-sim .res-row:hover{background:#f1f5f9}
+    #panel-sim .res-label{font-size:12px;color:#64748b}
+    #panel-sim .res-val  {font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+    #panel-sim .val-green{color:#059669}
+    #panel-sim .val-blue {color:#2563eb}
+    #panel-sim .val-red  {color:#ef4444}
+    #panel-sim .val-yellow{color:#d97706}
+    #panel-sim .val-white{color:#1e293b}
+
+    #panel-sim #canvas-wrap {
+      background:#fff;border:1px solid #e2e8f0;border-radius:12px;
+      display:flex;align-items:center;justify-content:center;overflow:hidden;
+      flex:1;min-height:0;
+    }
+
+    #panel-sim .btn-run  {
+      background:#238636;border:1px solid #2ea043;color:#fff;
+      border-radius:8px;padding:8px 20px;font-weight:700;font-size:13px;
+      cursor:pointer;transition:background .2s;width:100%;
+    }
+    #panel-sim .btn-run:hover{background:#2ea043}
+    #panel-sim .btn-stop {
+      background:#b62324;border:1px solid #f85149;color:#fff;
+      border-radius:8px;padding:8px 20px;font-weight:700;font-size:13px;
+      cursor:pointer;transition:background .2s;width:100%;
+    }
+    #panel-sim .btn-stop:hover{background:#f85149}
+
+    #panel-sim .badge {
+      display:inline-block;padding:1px 8px;border-radius:20px;
+      font-size:11px;font-weight:700;
+    }
+    #panel-sim .badge-green{background:rgba(63,185,80,.15);color:#3fb950;border:1px solid rgba(63,185,80,.3)}
+    #panel-sim .badge-red  {background:rgba(248,81,73,.15); color:#f85149;border:1px solid rgba(248,81,73,.3)}
+
+    #panel-sim hr.divider{border:none;border-top:1px solid #e2e8f0;margin:8px 0}
+
+    #panel-sim .models-bar{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px;margin-bottom:10px}
+    #panel-sim .models-row{display:flex;gap:6px;align-items:center}
+    #panel-sim .models-row + .models-row{margin-top:6px}
+    #panel-sim .mdl-input {
+      background:#fff;border:1px solid #e2e8f0;color:#1e293b;
+      border-radius:6px;padding:3px 7px;font-size:12px;flex:1;min-width:0;
+    }
+    #panel-sim .mdl-input:focus{outline:none;border-color:#6366f1}
+    #panel-sim .mdl-select {
+      background:#fff;border:1px solid #e2e8f0;color:#1e293b;
+      border-radius:6px;padding:3px 6px;font-size:12px;flex:1;min-width:0;cursor:pointer;
+    }
+    #panel-sim .mdl-btn {
+      background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;
+      border-radius:6px;padding:3px 9px;font-size:12px;cursor:pointer;white-space:nowrap;
+      transition:background .15s;
+    }
+    #panel-sim .mdl-btn:hover       {background:#e2e8f0}
+    #panel-sim .mdl-btn.save        {background:#f0fdf4;border-color:#10b981;color:#059669}
+    #panel-sim .mdl-btn.save:hover  {background:#10b981;color:#fff}
+    #panel-sim .mdl-btn.danger      {color:#ef4444}
+    #panel-sim .mdl-btn.danger:hover{background:#fef2f2;border-color:#ef4444}
+    #panel-sim .mdl-btn.export      {color:#2563eb}
+    #panel-sim .mdl-btn.export:hover{background:#eff6ff;border-color:#2563eb}
+    #panel-sim .mdl-label{font-size:10px;color:#64748b;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+
+    #panel-sim #rpm-badge{transition:color .3s}
+    #panel-sim .status-bar-mini{flex-wrap:wrap;gap:6px 12px}
+
+    /* Main 3-panel layout inside sim tab */
+    #panel-sim .main-layout {
+      display: grid;
+      grid-template-columns: 25% 40% 35%;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* Mobile tabs inside sim panel */
+    #panel-sim .mob-tab-bar{display:none}
+    #panel-sim .mob-tab-btn {
+      flex:1;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:2px;padding:8px 4px;
+      background:none;border:none;color:#94a3b8;cursor:pointer;
+      font-size:10px;font-weight:600;letter-spacing:.3px;transition:color .15s;
+    }
+    #panel-sim .mob-tab-btn .tab-icon{font-size:20px;line-height:1}
+    #panel-sim .mob-tab-btn.active{color:#6366f1}
+    #panel-sim .mob-tab-btn.active .tab-icon{filter:drop-shadow(0 0 4px #6366f188)}
+
+    @media (max-width: 768px) {
+      #panel-sim .mob-tab-bar{display:flex !important}
+      #panel-sim .main-layout {
+        display: flex !important;
+        flex-direction: column;
+        grid-template-columns: unset;
+        flex: 1 !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: hidden;
+        padding-bottom: 56px; /* room for fixed mob-tab-bar */
+      }
+      #panel-sim .panel-params,
+      #panel-sim .panel-canvas,
+      #panel-sim .panel-results {
+        display:none;width:100% !important;border:none !important;
+        min-width:0;
+      }
+      #panel-sim .panel-params.active,
+      #panel-sim .panel-canvas.active,
+      #panel-sim .panel-results.active {
+        display:flex;flex-direction:column;
+        flex:1;min-height:0;overflow-y:auto;
+      }
+      #panel-sim .panel-canvas.active{padding:12px;overflow-y:hidden}
+      #panel-sim #canvas-wrap{flex:1;min-height:0}
+    }
+
+    /* Mobile tab bar position — fixed within viewport, only shows when sim tab active */
+    #panel-sim .mob-tab-bar-fixed {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #fff; border-top: 1px solid #e2e8f0;
+      height: 56px; z-index: 400;
+    }
+
+    /* ══════════════════════════════════════════════════════
+       MOBILE — full-viewport layout
+    ══════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+
+      /* Body fills exactly the viewport — each panel manages its own scroll */
+      body { height: 100dvh; overflow: hidden; min-height: unset; }
+
+      /* ── Header: row 1 = logo + tabs, row 2 = member chips ── */
+      .app-header {
+        height: auto !important;
+        padding: 10px 14px 8px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+      }
+      .app-header-top {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .app-logo   { font-size: 15px; }
+      .logo-icon  { font-size: 13px; padding: 4px 9px; }
+      .app-tabs   { gap: 2px; }
+      .app-tab    { padding: 5px 10px; font-size: 12px; gap: 3px; }
+      .member-legend { gap: 6px; padding-bottom: 2px; }
+      .member-chip   { padding: 4px 8px; font-size: 10px; gap: 5px; }
+
+      /* ── Active panels fill remaining height ── */
+      #panel-kanban.active {
+        display: flex !important;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+      }
+      #panel-sim.active {
+        display: flex !important;
+        flex-direction: column;
+        flex: 1 !important;
+        min-height: 0 !important;
+        height: auto !important;
+      }
+
+      /* ── Kanban toolbar ── */
+      .kanban-toolbar { padding: 10px 14px 6px; gap: 8px; flex-shrink: 0; }
+      .kanban-title   { font-size: 16px; }
+      .btn            { padding: 7px 12px; font-size: 12px; gap: 4px; }
+
+      /* ── Monday board on mobile ── */
+      .monday-board { padding: 8px 10px 24px; gap: 12px; }
+      .monday-col-hdr { display: none; }   /* hide column headers — too wide on mobile */
+      .monday-row {
+        grid-template-columns: 1fr auto;   /* task | assignee only */
+      }
+      .monday-row-tags,
+      .monday-row-pri-cell,
+      .monday-row-date-cell { display: none; }
+      .monday-row-actions { display: flex !important; position: static;
+        transform: none; box-shadow: none; background: transparent;
+        padding: 0; margin-right: 4px; }
+      .monday-gh { padding: 0 10px; }
+      .monday-gh-add { font-size: 11px; padding: 3px 6px; }
+
+      /* Prevent iOS auto-zoom on input focus (triggers when font-size < 16px) */
+      .form-input, .form-textarea, .form-select { font-size: 16px !important; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════
+     APP HEADER
+══════════════════════════════════════════════════ -->
+<header class="app-header">
+  <div class="app-header-top">
+    <div class="app-logo">
+      <div class="logo-icon">HEEP</div>
+    </div>
+    <div class="app-tabs">
+      <button class="app-tab active" data-panel="kanban" onclick="switchTab('kanban')">
+        📋 לוח משימות
+      </button>
+      <button class="app-tab" data-panel="sim" onclick="switchTab('sim')">
+        ⚡ סימולטור Homopolar
+      </button>
+    </div>
+  </div>
+  <div class="member-legend" id="memberLegend"></div>
+</header>
+
+<!-- ══════════════════════════════════════════════════
+     KANBAN PANEL
+══════════════════════════════════════════════════ -->
+<div id="panel-kanban" class="tab-panel active">
+  <div class="kanban-toolbar">
+    <h2 class="kanban-title">📋 לוח משימות</h2>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost"   onclick="KB.exportJSON()">⬇ ייצוא JSON</button>
+      <button class="btn btn-primary" onclick="KB.openModal()">＋ כרטיס חדש</button>
+    </div>
+  </div>
+  <div class="monday-board" id="kanbanBoard"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     SIMULATOR PANEL (Homopolar Generator)
+══════════════════════════════════════════════════ -->
+<div id="panel-sim" class="tab-panel" dir="ltr">
+
+  <!-- Simulator sub-header -->
+  <header class="border-b border-gray-800 px-6 py-3 flex items-center justify-between" style="flex-shrink:0">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">⚡</div>
+      <div>
+        <div class="font-bold text-sm text-white">Homopolar Generator Simulator</div>
+        <div class="text-xs text-gray-500">Ported from FLATGEN.PAS • May 2026</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="status-badge" class="badge badge-green animate-pulse">● READY</span>
+      <span id="rpm-badge" class="text-xs text-gray-400 font-mono">0 RPM</span>
+    </div>
+  </header>
+
+  <!-- 3-panel layout -->
+  <div class="grid overflow-hidden main-layout" style="grid-template-columns:27% 24% 49%;flex:1;min-height:0">
+
+    <!-- ── LEFT: Parameters ── -->
+    <aside class="border-r border-gray-800 overflow-y-auto p-4 panel-params active" style="background:#f8fafc">
+
+      <div class="models-bar">
+        <div class="mdl-label" style="margin-bottom:6px">💾 Models</div>
+        <div class="models-row">
+          <input class="mdl-input" id="mdl-name" type="text" placeholder="Model name…" />
+          <button class="mdl-btn save" onclick="saveModel()" title="Save current params">💾 Save</button>
+        </div>
+        <div class="models-row">
+          <select class="mdl-select" id="mdl-select" onchange="loadModel(this.value)">
+            <option value="">— load saved model —</option>
+          </select>
+          <button class="mdl-btn danger" onclick="deleteModel()" title="Delete selected">🗑</button>
+        </div>
+        <div class="models-row" style="margin-top:6px">
+          <button class="mdl-btn export" onclick="simExportJSON()" style="flex:1">📤 Export</button>
+          <label class="mdl-btn export" style="flex:1;text-align:center;cursor:pointer" title="Import models from JSON file">
+            📥 Import<input type="file" accept=".json" onchange="simImportJSON(event)" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none" />
+          </label>
+        </div>
+      </div>
+
+      <div class="section-hdr">🧲 Magnets</div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="text-xs text-gray-500" title="Inner Diameter (mm)">ID (mm)</label>
+          <input class="param-input" id="p_MagsID"    type="number" value="100" min="1" /></div>
+        <div><label class="text-xs text-gray-500" title="Outer Diameter (mm)">OD (mm)</label>
+          <input class="param-input" id="p_MagsOD"    type="number" value="200" min="1" /></div>
+        <div><label class="text-xs text-gray-500" title="Magnet stack height (mm)">Mag H (mm)</label>
+          <input class="param-input" id="p_MagsHight" type="number" value="20"  min="1" /></div>
+        <div><label class="text-xs text-gray-500" title="Core/coil height (mm)">Core H (mm)</label>
+          <input class="param-input" id="p_CoreHight" type="number" value="30"  min="1" /></div>
+        <div class="col-span-2"><label class="text-xs text-gray-500" title="Average magnetic flux density in air gap (Tesla)">Avg Field (T)</label>
+          <input class="param-input" id="p_AvrgField" type="number" value="0.5" step="0.01" min="0.01" /></div>
+      </div>
+
+      <div class="section-hdr">🛡 Shielding</div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="text-xs text-gray-500" title="Width of each shield plate at OD (mm)">Plate W (mm)</label>
+          <input class="param-input" id="p_ShldPlatW"       type="number" value="5"  min="1" /></div>
+        <div><label class="text-xs text-gray-500" title="Gap between adjacent shield plates (mm)">Spacing (mm)</label>
+          <input class="param-input" id="p_ShldPlatSpacing" type="number" value="10" min="0.1" /></div>
+      </div>
+
+      <div class="section-hdr">🔌 Wire</div>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="col-span-2"><label class="text-xs text-gray-500">Wire Type</label>
+          <select class="param-input" id="p_WireTp">
+            <option value="0">Round</option>
+            <option value="1">Square</option>
+          </select>
+        </div>
+        <div><label class="text-xs text-gray-500" title="Wire diameter (round) or width (square) in mm">W/Dia (mm)</label>
+          <input class="param-input" id="p_WireW_Dia"   type="number" value="2"   step="0.1" min="0.1" /></div>
+        <div><label class="text-xs text-gray-500" title="Copper conductor height (mm)">Cu H (mm)</label>
+          <input class="param-input" id="p_WireH_Copr"  type="number" value="1.8" step="0.1" min="0.1" /></div>
+        <div><label class="text-xs text-gray-500" title="Number of winding layers">Layers</label>
+          <input class="param-input" id="p_WireLayers"  type="number" value="3"   min="1" /></div>
+        <div><label class="text-xs text-gray-500" title="Number of parallel-connected wire segments">Segments</label>
+          <input class="param-input" id="p_WireSegs"    type="number" value="10"  min="1" /></div>
+      </div>
+
+      <div class="section-hdr">⚙️ Environment</div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="text-xs text-gray-500" title="Drive motor input power (Watts)">Motor (W)</label>
+          <input class="param-input" id="p_DriveMotorW" type="number" value="1000" min="1" /></div>
+        <div><label class="text-xs text-gray-500" title="Rotor speed (rev/min)">RPM</label>
+          <input class="param-input" id="p_RPM"         type="number" value="3000" min="1" /></div>
+        <div class="col-span-2"><label class="text-xs text-gray-500" title="Total load current across ALL segments (Amperes)">Load Amps (A)</label>
+          <input class="param-input" id="p_LoadAmp"     type="number" value="100"  min="0" /></div>
+      </div>
+
+      <div class="section-hdr">📝 Comment</div>
+      <input class="param-input" id="p_Comment" type="text" placeholder="Design note…" />
+
+      <hr class="divider mt-4" />
+
+      <div class="flex gap-2 mt-4">
+        <button class="btn-run"  id="btn-run"  onclick="startSim()">▶ Run</button>
+        <button class="btn-stop" id="btn-stop" onclick="stopSim()" style="display:none">■ Stop</button>
+      </div>
+      <div class="mt-2">
+        <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+          <input type="checkbox" id="chk-live" checked class="accent-green-500" />
+          Live recalc
+        </label>
+      </div>
+
+    </aside>
+
+    <!-- ── CENTER: Canvas ── -->
+    <main class="flex flex-col gap-3 p-4 overflow-hidden panel-canvas" style="min-width:0;min-height:0">
+      <div id="canvas-wrap" class="flex-1">
+        <canvas id="gen-canvas"></canvas>
+      </div>
+      <div class="flex gap-6 text-xs text-gray-500 px-2 justify-center status-bar-mini">
+        <span>Velocity: <span id="st-vel"    class="text-blue-400 font-mono">—</span> m/s</span>
+        <span>Seg V: <span id="st-segv"   class="text-green-400 font-mono">—</span> V</span>
+        <span>Seg A: <span id="st-sega"   class="text-green-400 font-mono">—</span> A</span>
+        <span>Power Ratio: <span id="st-ratio"  class="text-yellow-400 font-mono">—</span>×</span>
+        <span>Shield Plates: <span id="st-plates" class="text-gray-300 font-mono">—</span></span>
+        <span>Turns: <span id="st-turns"  class="text-gray-300 font-mono">—</span></span>
+      </div>
+    </main>
+
+    <!-- ── RIGHT: Results ── -->
+    <aside class="border-l border-gray-800 overflow-y-auto p-4 panel-results" style="background:#f8fafc">
+
+      <div class="section-hdr">🔧 Wiring</div>
+      <div class="res-row"><span class="res-label">Shield Plates</span>     <span class="res-val val-white"  id="r_shieldPlates">—</span></div>
+      <div class="res-row"><span class="res-label">Trpz at ID/OD (mm)</span><span class="res-val val-white"  id="r_trpz">—</span></div>
+      <div class="res-row"><span class="res-label">Tunnel ID (mm)</span>    <span class="res-val val-white"  id="r_tunnelID">—</span></div>
+      <div class="res-row"><span class="res-label">Tunnel OD (mm)</span>    <span class="res-val val-white"  id="r_tunnelOD">—</span></div>
+      <hr class="divider" />
+      <div class="res-row"><span class="res-label">Layer Turns</span>       <span class="res-val val-green"  id="r_turns">—</span></div>
+      <div class="res-row"><span class="res-label">Total Turns</span>       <span class="res-val val-green"  id="r_totTurns">—</span></div>
+      <div class="res-row"><span class="res-label">Total Wire (m)</span>    <span class="res-val val-green"  id="r_totWire">—</span></div>
+      <hr class="divider" />
+      <div class="res-row"><span class="res-label">Seg Length (m)</span>    <span class="res-val val-blue"   id="r_segLen">—</span></div>
+      <div class="res-row"><span class="res-label">Seg Resist (Ω)</span>    <span class="res-val val-blue"   id="r_segRes">—</span></div>
+
+      <div class="section-hdr">⚡ Process</div>
+      <div class="res-row"><span class="res-label">Velocity (m/s)</span>    <span class="res-val val-blue"   id="r_velocity">—</span></div>
+      <div class="res-row"><span class="res-label">Active Len / Seg (m)</span><span class="res-val val-blue" id="r_activeLen">—</span></div>
+      <hr class="divider" />
+      <div class="res-row"><span class="res-label">Seg Induced V</span>     <span class="res-val val-green"  id="r_segIndVlt">—</span></div>
+      <div class="res-row"><span class="res-label">Seg Effective V</span>   <span class="res-val val-blue"   id="r_segEffV">—</span></div>
+      <div class="res-row"><span class="res-label">Seg Amp</span>           <span class="res-val val-green"  id="r_segAmp">—</span></div>
+      <div class="res-row"><span class="res-label">Seg Power <span style="font-size:9px;color:#3fb950;font-weight:400">(V_eff)</span></span>
+                                                                             <span class="res-val val-green"  id="r_segPower">—</span></div>
+      <div class="res-row"><span class="res-label">Seg Heat (W)</span>      <span class="res-val val-red"    id="r_segHeat">—</span></div>
+      <div class="res-row"><span class="res-label">Seg V Drop</span>        <span class="res-val val-yellow" id="r_vDrop">—</span></div>
+      <hr class="divider" />
+      <div class="res-row" style="background:#f0fdf4;border:1px solid #a7f3d0;border-radius:8px">
+        <span class="res-label font-semibold" style="color:#059669">Sys Output <span style="font-size:9px;font-weight:400">(V_eff)</span></span>
+        <span class="res-val val-green text-lg" id="r_sysPower">—</span>
+      </div>
+      <div class="res-row" style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px">
+        <span class="res-label" style="color:#ef4444">Sys Heat</span>
+        <span class="res-val val-red" id="r_sysHeat">—</span>
+      </div>
+      <div class="res-row mt-2" style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px">
+        <span class="res-label font-semibold" style="color:#d97706">Power Ratio</span>
+        <span class="res-val val-yellow text-xl font-black" id="r_powerRatio">—</span>
+      </div>
+
+    </aside>
+  </div><!-- /main-layout -->
+
+  <!-- Mobile Tab Bar (only visible on small screens when sim tab is active) -->
+  <nav class="mob-tab-bar mob-tab-bar-fixed border-t border-gray-800" style="background:#fff;height:56px">
+    <button class="mob-tab-btn active" id="mtab-params" onclick="simMobTab('params')">
+      <span class="tab-icon">⚙️</span><span>Params</span>
+    </button>
+    <button class="mob-tab-btn" id="mtab-canvas" onclick="simMobTab('canvas')">
+      <span class="tab-icon">⚡</span><span>Sim</span>
+    </button>
+    <button class="mob-tab-btn" id="mtab-results" onclick="simMobTab('results')">
+      <span class="tab-icon">📊</span><span>Results</span>
+    </button>
+  </nav>
+
+</div><!-- /panel-sim -->
+
+<!-- ══════════════════════════════════════════════════
+     CARD MODAL
+══════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="cardModal" onclick="if(event.target===this)KB.closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">כרטיס חדש</div>
+      <button class="modal-close" onclick="KB.closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">כותרת המשימה *</label>
+        <input class="form-input" id="fTitle" placeholder="תאר את המשימה בקצרה…"
+          onkeydown="if(event.key==='Enter')KB.save()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">תיאור</label>
+        <textarea class="form-textarea" id="fDesc" placeholder="פרטים נוספים…"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">עמודה</label>
+          <select class="form-select" id="fCol">
+            <option value="todo">לביצוע</option>
+            <option value="inprogress">בעבודה</option>
+            <option value="review">לבדיקה</option>
+            <option value="done">הושלם</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">תגיות (פסיקים)</label>
+          <input class="form-input" id="fTags" placeholder="פיזיקה, UI, דחוף">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">תאריך יעד</label>
+          <input class="form-input" id="fDate" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">📅 פגישה</label>
+          <input class="form-input" id="fMeeting" type="datetime-local">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">עדיפות</label>
+        <div class="priority-picker">
+          <div class="priority-option high"   data-p="high"   onclick="KB.selectPri('high')">🔴 גבוהה</div>
+          <div class="priority-option medium selected" data-p="medium" onclick="KB.selectPri('medium')">🟡 בינונית</div>
+          <div class="priority-option low"    data-p="low"    onclick="KB.selectPri('low')">🟢 נמוכה</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">אחראי</label>
+        <div class="assignee-picker" id="fAssignee"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost"   onclick="KB.closeModal()">ביטול</button>
+      <button class="btn btn-primary" onclick="KB.save()">💾 שמור</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+/* ─────────────────────────────────────────────────
+   TEAM & KANBAN CONFIG
+───────────────────────────────────────────────── */
+const TEAM = [
+  { id:'uri',   name:'אורי',  color:'#6366f1' },
+  { id:'dadi',  name:'דדי',   color:'#8b5cf6' },
+  { id:'ronen', name:'רונן',  color:'#10b981' },
+  { id:'kobi',  name:'קובי',  color:'#f59e0b' },
+];
+
+const COLS = [
+  { id:'todo',       label:'לביצוע',  color:'#64748b' },
+  { id:'inprogress', label:'בעבודה',  color:'#6366f1' },
+  { id:'review',     label:'לבדיקה', color:'#f59e0b' },
+  { id:'done',       label:'הושלם',  color:'#10b981' },
+];
+
+const TAG_PALETTE = {
+  'פיזיקה':  { bg:'#ede9fe', fg:'#7c3aed' },
+  'UI':      { bg:'#dbeafe', fg:'#1d4ed8' },
+  'בדיקה':  { bg:'#fef3c7', fg:'#b45309' },
+  'מכונות': { bg:'#d1fae5', fg:'#065f46' },
+  'דחוף':   { bg:'#fee2e2', fg:'#991b1b' },
+  '_':       { bg:'#f1f5f9', fg:'#475569' },
+};
+function tagStyle(t) {
+  const p = TAG_PALETTE[t] || TAG_PALETTE['_'];
+  return `background:${p.bg};color:${p.fg}`;
+}
+
+/* ─────────────────────────────────────────────────
+   SUPABASE CONFIG
+───────────────────────────────────────────────── */
+const SUPA_URL = 'https://othsunrrxodhfgydbqit.supabase.co';
+const SUPA_KEY = 'sb_publishable_51vRvWlXfgI0jwJ7xxIY9g_LUoddHeK';
+let _supa = null;
+
+/* ─────────────────────────────────────────────────
+   KANBAN MODULE
+───────────────────────────────────────────────── */
+const KB = (() => {
+  let state      = { cards:[], nextId:1 };
+  let editId     = null, selPri = 'medium', selMembers = [], dragId = null;
+  let filterMem  = null; // active member filter (null = show all)
+
+  async function load() {
+    // Try Supabase first
+    if (_supa) {
+      try {
+        const { data } = await _supa.from('heep_board').select('state').eq('id', 1).single();
+        if (data?.state?.cards !== undefined) {
+          state = data.state;
+          localStorage.setItem('tb_state', JSON.stringify(state));
+          return;
+        }
+      } catch(e) {}
+    }
+    // Fallback to localStorage
+    try {
+      const s = localStorage.getItem('tb_state');
+      if (s) { state = JSON.parse(s); return; }
+    } catch {}
+    seed();
+    save();
+  }
+
+  function save() {
+    localStorage.setItem('tb_state', JSON.stringify(state));
+    if (_supa) {
+      _supa.from('heep_board')
+        .update({ state: state, updated_at: new Date().toISOString() })
+        .eq('id', 1)
+        .catch(() => {});
+    }
+  }
+
+  function applyRemote(newState) {
+    state = newState;
+    localStorage.setItem('tb_state', JSON.stringify(state));
+    render();
+  }
+
+  function seed() {
+    const demos = [
+      { col:'todo',       title:'עיצוב ממשק לסימולטור',        desc:'פאנל שליטה וויזואליזציית גנרטור', m:['uri'],          p:'high',   tags:['UI'] },
+      { col:'todo',       title:'כיול שדה מגנטי — Avg Field',   desc:'מדידות בנקודות שונות ב-air gap',  m:['dadi'],         p:'high',   tags:['פיזיקה'] },
+      { col:'inprogress', title:'אופטימיזציה של shield plates',  desc:'חישוב מספר טרפזים אופטימלי',     m:['dadi','kobi'],  p:'medium', tags:['פיזיקה','מכונות'] },
+      { col:'inprogress', title:'בדיקת ביצועים — 3000 RPM',     desc:'מדידת חום ויחס הספק בעומס מלא',  m:['kobi'],         p:'medium', tags:['בדיקה'] },
+      { col:'review',     title:'לוח משימות — Drag & Drop',      desc:'גרירה בין עמודות עם LocalStorage', m:['uri'],          p:'low',    tags:['UI'] },
+      { col:'done',       title:'פורט FLATGEN.PAS לדפדפן',      desc:'לוגיקת חישוב CalcWires + Process', m:['ronen','dadi'], p:'low',    tags:[] },
+    ];
+    demos.forEach(d => state.cards.push({
+      id:state.nextId++, col:d.col, title:d.title, desc:d.desc,
+      members:d.m, priority:d.p, tags:d.tags, ts:Date.now()
+    }));
+    save();
+  }
+
+  function getMembers(c) {
+    // backward-compat: old cards have c.member (string), new have c.members (array)
+    if (Array.isArray(c.members)) return c.members;
+    if (c.member) return [c.member];
+    return [];
+  }
+
+  function render() {
+    const board = document.getElementById('kanbanBoard');
+    board.innerHTML = '';
+    COLS.forEach(col => {
+      const cards = state.cards.filter(c =>
+        c.col === col.id && (filterMem === null || getMembers(c).includes(filterMem))
+      );
+      board.appendChild(buildCol(col, cards));
+    });
+    renderLegend();
+  }
+
+  function toggleFilter(memberId) {
+    filterMem = (filterMem === memberId) ? null : memberId;
+    render();
+  }
+
+  function buildCol(col, cards) {
+    const wrap = document.createElement('div');
+    wrap.className = 'monday-group';
+    wrap.dataset.col = col.id;
+    wrap.innerHTML = `
+      <div class="monday-gh">
+        <span class="monday-gh-arrow">▾</span>
+        <div class="monday-gh-dot" style="background:${col.color}"></div>
+        <span class="monday-gh-name">${col.label}</span>
+        <span class="monday-gh-cnt">${cards.length}</span>
+        <div class="monday-gh-spacer"></div>
+        <button class="monday-gh-add" onclick="KB.openModal('${col.id}')">＋ הוסף</button>
+      </div>
+      <div class="monday-col-hdr">
+        <div>משימה</div>
+        <div>אחראי</div>
+        <div>עדיפות</div>
+        <div>תאריך</div>
+        <div>תגיות</div>
+      </div>
+      <div class="monday-rows" id="col-${col.id}"
+        ondragover="KB.dragOver(event,'${col.id}')"
+        ondrop="KB.drop(event,'${col.id}')"
+        ondragleave="KB.dragLeave(event)">
+        ${cards.map(cardHTML).join('')}
+      </div>`;
+    // collapse toggle
+    wrap.querySelector('.monday-gh').addEventListener('click', e => {
+      if (e.target.closest('button')) return;
+      const rows = wrap.querySelector('.monday-rows');
+      const hdr  = wrap.querySelector('.monday-col-hdr');
+      const arr  = wrap.querySelector('.monday-gh-arrow');
+      const open = rows.style.display !== 'none';
+      rows.style.display = open ? 'none' : '';
+      if (hdr) hdr.style.display = open ? 'none' : '';
+      arr.classList.toggle('collapsed', open);
+    });
+    return wrap;
+  }
+
+  function meetingBadge(dt) {
+    if (!dt) return '';
+    const d = new Date(dt);
+    const now = new Date();
+    const past = d < now;
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const hh = String(d.getHours()).padStart(2,'0');
+    const min = String(d.getMinutes()).padStart(2,'0');
+    const style = past ? 'background:#fef2f2;color:#ef4444;border:1px solid #fecaca' : '';
+    return `<span class="meeting-badge" style="${style}">🤝 ${dd}/${mm} ${hh}:${min}</span>`;
+  }
+
+  function cardHTML(c) {
+    const members = getMembers(c).map(id => TEAM.find(t => t.id === id)).filter(Boolean);
+    const tags    = (c.tags||[]).map(t =>
+      `<span class="card-tag" style="${tagStyle(t)}">${t}</span>`
+    ).join('');
+    const avatars = members.map(m =>
+      `<div class="monday-avatar" style="background:${m.color}" title="${m.name}">${m.name[0]}</div>`
+    ).join('');
+    const priMap  = { high:['pri-high','🔴 גבוהה'], medium:['pri-medium','🟡 בינונית'], low:['pri-low','🟢 נמוכה'] };
+    const [priCls, priTxt] = priMap[c.priority] || priMap.medium;
+    let dateBadge = '';
+    if (c.date) {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const d = new Date(c.date); d.setHours(0,0,0,0);
+      const diff = d - today;
+      const cls  = diff < 0 ? 'date-overdue' : diff === 0 ? 'date-today' : 'date-future';
+      const icon = diff < 0 ? '⚠️' : '📅';
+      const [y,m,day] = c.date.split('-');
+      dateBadge = `<span class="date-badge ${cls}">${icon} ${day}/${m}</span>`;
+    }
+    return `
+      <div class="monday-row" id="card-${c.id}"
+        draggable="true"
+        ondragstart="KB.dragStart(event,${c.id})"
+        ondragend="KB.dragEnd(event)">
+        <div class="monday-row-name">
+          <div class="monday-row-title">${esc(c.title)}</div>
+          ${c.desc ? `<div class="monday-row-sub">${esc(c.desc)}</div>` : ''}
+          ${c.meeting ? `<div style="margin-top:3px">${meetingBadge(c.meeting)}</div>` : ''}
+        </div>
+        <div class="monday-row-members">${avatars}</div>
+        <div class="monday-row-pri-cell"><span class="monday-pri-badge ${priCls}">${priTxt}</span></div>
+        <div class="monday-row-date-cell">${dateBadge}</div>
+        <div class="monday-row-tags">${tags}</div>
+        <div class="monday-row-actions">
+          <button class="card-action-btn" onclick="KB.openModal(null,${c.id})" title="עריכה">✏️</button>
+          <button class="card-action-btn" onclick="KB.del(${c.id})" title="מחיקה">🗑️</button>
+        </div>
+      </div>`;
+  }
+
+  function renderLegend() {
+    document.getElementById('memberLegend').innerHTML = TEAM.map(m => {
+      const isActive = filterMem === m.id;
+      return `<div class="member-chip${isActive ? ' active' : ''}"
+        style="${isActive ? `background:${m.color}` : ''}"
+        onclick="KB.toggleFilter('${m.id}')" title="${isActive ? 'לחץ לביטול פילטר' : `הצג רק משימות של ${m.name}`}">
+        <div class="member-dot" style="background:${isActive ? 'rgba(255,255,255,0.7)' : m.color}"></div>
+        ${m.name}
+        ${isActive ? '<span style="opacity:.7;font-size:10px">✕</span>' : ''}
+      </div>`;
+    }).join('');
+  }
+
+  function priLabel(p) { return p==='high'?'גבוהה':p==='medium'?'בינונית':'נמוכה'; }
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  /* Drag & Drop */
+  function dragStart(e, id) {
+    dragId = id;
+    e.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => document.getElementById(`card-${id}`)?.classList.add('dragging'), 0);
+  }
+  function dragEnd() {
+    document.getElementById(`card-${dragId}`)?.classList.remove('dragging');
+    document.querySelectorAll('.monday-rows').forEach(c => c.classList.remove('drag-over'));
+    dragId = null;
+  }
+  function dragOver(e, col) {
+    e.preventDefault();
+    document.querySelectorAll('.monday-rows').forEach(c => c.classList.remove('drag-over'));
+    document.getElementById(`col-${col}`)?.classList.add('drag-over');
+  }
+  function dragLeave(e) {
+    if (!e.currentTarget.contains(e.relatedTarget))
+      e.currentTarget.classList.remove('drag-over');
+  }
+  function drop(e, col) {
+    e.preventDefault();
+    if (dragId == null) return;
+    const card = state.cards.find(c => c.id === dragId);
+    if (card) { card.col = col; save(); render(); }
+  }
+
+  /* Modal */
+  function openModal(colId = null, cardId = null) {
+    editId = cardId;
+    document.getElementById('fAssignee').innerHTML = TEAM.map(m =>
+      `<div class="assignee-option" data-m="${m.id}" onclick="KB.toggleMem('${m.id}')">
+         <div class="assignee-avatar" style="background:${m.color}">${m.name[0]}</div>
+         <div class="assignee-name">${m.name}</div>
+       </div>`
+    ).join('');
+    if (cardId) {
+      const c = state.cards.find(x => x.id === cardId);
+      if (!c) return;
+      document.getElementById('modalTitle').textContent = 'עריכת כרטיס';
+      document.getElementById('fTitle').value = c.title;
+      document.getElementById('fDesc').value  = c.desc||'';
+      document.getElementById('fCol').value   = c.col;
+      document.getElementById('fTags').value  = (c.tags||[]).join(', ');
+      document.getElementById('fDate').value    = c.date||'';
+      document.getElementById('fMeeting').value = c.meeting||'';
+      selectPri(c.priority);
+      selMembers = [...getMembers(c)];
+      refreshAssigneePicker();
+    } else {
+      document.getElementById('modalTitle').textContent = 'כרטיס חדש';
+      document.getElementById('fTitle').value = '';
+      document.getElementById('fDesc').value  = '';
+      document.getElementById('fCol').value   = colId||'todo';
+      document.getElementById('fTags').value  = '';
+      document.getElementById('fDate').value    = '';
+      document.getElementById('fMeeting').value = '';
+      selectPri('medium');
+      selMembers = [];
+      refreshAssigneePicker();
+    }
+    document.getElementById('cardModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => document.getElementById('fTitle').focus(), 80);
+  }
+
+  function closeModal() {
+    document.getElementById('cardModal').classList.remove('open');
+    document.body.style.overflow = '';
+    editId = null;
+  }
+
+  function selectPri(p) {
+    selPri = p;
+    document.querySelectorAll('.priority-option').forEach(el =>
+      el.classList.toggle('selected', el.dataset.p === p)
+    );
+  }
+
+  function toggleMem(id) {
+    const idx = selMembers.indexOf(id);
+    if (idx === -1) selMembers.push(id);
+    else selMembers.splice(idx, 1);
+    refreshAssigneePicker();
+  }
+
+  function refreshAssigneePicker() {
+    document.querySelectorAll('.assignee-option').forEach(el =>
+      el.classList.toggle('selected', selMembers.includes(el.dataset.m))
+    );
+  }
+
+  // kept for backward-compat (modal selectPri still uses selectMem pattern internally)
+  function selectMem(id) { selMembers = id ? [id] : []; refreshAssigneePicker(); }
+
+  function saveFn() {
+    const title = document.getElementById('fTitle').value.trim();
+    if (!title) { document.getElementById('fTitle').focus(); return; }
+    const tags = document.getElementById('fTags').value.split(',').map(t=>t.trim()).filter(Boolean);
+    const date    = document.getElementById('fDate').value;
+    const meeting = document.getElementById('fMeeting').value;
+    if (editId) {
+      const c = state.cards.find(x => x.id === editId);
+      if (c) { c.title=title; c.desc=document.getElementById('fDesc').value.trim();
+               c.col=document.getElementById('fCol').value; c.priority=selPri;
+               c.members=[...selMembers]; delete c.member; c.tags=tags;
+               c.date=date||''; c.meeting=meeting||''; }
+    } else {
+      state.cards.push({
+        id:state.nextId++, col:document.getElementById('fCol').value,
+        title, desc:document.getElementById('fDesc').value.trim(),
+        members:[...selMembers], priority:selPri, tags,
+        date:date||'', meeting:meeting||'', ts:Date.now(),
+      });
+    }
+    save(); render(); closeModal();
+  }
+
+  function del(id) {
+    if (!confirm('למחוק את הכרטיס?')) return;
+    state.cards = state.cards.filter(c => c.id !== id);
+    save(); render();
+  }
+
+  function exportJSON() {
+    const a = Object.assign(document.createElement('a'), {
+      href:     URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'})),
+      download: 'teamboard.json',
+    });
+    a.click();
+  }
+
+  return { init:load, render, openModal, closeModal, selectPri, selectMem, toggleMem,
+           save:saveFn, del, dragStart, dragEnd, dragOver, dragLeave, drop, exportJSON, toggleFilter, applyRemote };
+})();
+
+
+/* ─────────────────────────────────────────────────
+   HOMOPOLAR GENERATOR SIMULATOR
+   (ported from FLATGEN.PAS)
+───────────────────────────────────────────────── */
+
+// ── Constants ──────────────────────────────────
+const COPPER_RESISTIVITY = 0.017; // Ω·mm²/m
+// const HP_KW           = 0.74;  // unused
+
+// ── Animation state ────────────────────────────
+let animFrame = null;
+let rotAngle  = 0;
+let isRunning = false;
+let simParticles = [];   // named simParticles to avoid any future conflicts
+let lastCalc  = {};
+let simInitialized = false;
+
+// Canvas refs — resolved lazily when sim tab opens
+let genCanvas, genCtx, canvasWrap;
+
+function initSimCanvas() {
+  if (simInitialized) { resizeCanvas(); return; }
+  simInitialized = true;
+  genCanvas  = document.getElementById('gen-canvas');
+  genCtx     = genCanvas.getContext('2d');
+  canvasWrap = document.getElementById('canvas-wrap');
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+  initModels().then(() => refreshModelSelect());
+  setTimeout(recalc, 80);
+  requestAnimationFrame(drawFrame);
+}
+
+function resizeCanvas() {
+  if (!genCanvas || !canvasWrap) return;
+  genCanvas.width  = canvasWrap.clientWidth  - 2;
+  genCanvas.height = canvasWrap.clientHeight - 2;
+  drawFrame();
+}
+
+// ── Mobile tab (inside simulator panel) ────────
+function simMobTab(name) {
+  ['params','canvas','results'].forEach(t => {
+    document.querySelector('#panel-sim .panel-' + t).classList.toggle('active', t === name);
+    document.getElementById('mtab-' + t).classList.toggle('active', t === name);
+  });
+  if (name === 'canvas') setTimeout(resizeCanvas, 50);
+}
+
+// ══════════════════════════════════════════════
+//  MODEL SAVE / LOAD
+// ══════════════════════════════════════════════
+const MDL_KEY = 'homopolar_models';
+function getStore()  { try { return JSON.parse(localStorage.getItem(MDL_KEY)||'{}'); } catch { return {}; } }
+function putStore(s) {
+  localStorage.setItem(MDL_KEY, JSON.stringify(s));
+  if (_supa) {
+    Promise.resolve(
+      _supa.from('heep_board')
+        .update({ state: s, updated_at: new Date().toISOString() })
+        .eq('id', 2)
+    ).catch(() => {});
+  }
+}
+
+async function initModels() {
+  if (_supa) {
+    try {
+      const { data } = await _supa.from('heep_board').select('state').eq('id', 2).single();
+      if (data?.state && Object.keys(data.state).length > 0) {
+        localStorage.setItem(MDL_KEY, JSON.stringify(data.state));
+        return;
+      }
+    } catch(e) {}
+  }
+  // Nothing in Supabase — seed defaults and push up
+  seedDefaultModels();
+  if (_supa) {
+    const store = getStore();
+    Promise.resolve(
+      _supa.from('heep_board')
+        .upsert({ id: 2, state: store, updated_at: new Date().toISOString() })
+    ).catch(() => {});
+  }
+}
+
+/* ── Default models (seed on first visit / empty store) ── */
+const DEFAULT_MODELS = {
+  'Basic 100mm': {
+    MagsID:100, MagsOD:200, MagsHight:20, CoreHight:30, AvrgField:0.5,
+    ShldPlatW:5, ShldPlatSpacing:10,
+    WireTp:0, WireW_Dia:2, WireH_Copr:1.8, WireLayers:3, WireSegs:10,
+    DriveMotorW:1000, RPM:3000, LoadAmp:100, Comment:'Basic design 100mm magnets'
+  },
+  'High Torque 200mm': {
+    MagsID:150, MagsOD:300, MagsHight:35, CoreHight:50, AvrgField:0.8,
+    ShldPlatW:8, ShldPlatSpacing:12,
+    WireTp:1, WireW_Dia:3, WireH_Copr:2.8, WireLayers:5, WireSegs:16,
+    DriveMotorW:3000, RPM:1500, LoadAmp:250, Comment:'High torque large diameter'
+  },
+  'Mini 50mm': {
+    MagsID:40, MagsOD:90, MagsHight:10, CoreHight:15, AvrgField:0.35,
+    ShldPlatW:3, ShldPlatSpacing:6,
+    WireTp:0, WireW_Dia:0.8, WireH_Copr:0.6, WireLayers:2, WireSegs:6,
+    DriveMotorW:200, RPM:6000, LoadAmp:30, Comment:'Compact mini generator'
+  }
+};
+
+function seedDefaultModels() {
+  const store = getStore();
+  if (Object.keys(store).length > 0) return; // already has models — don't overwrite
+  putStore(DEFAULT_MODELS);
+}
+
+function refreshModelSelect() {
+  const sel   = document.getElementById('mdl-select');
+  if (!sel) return;
+  const store = getStore();
+  const names = Object.keys(store).sort();
+  const prev  = sel.value;
+  sel.innerHTML = '<option value="">— load saved model —</option>' +
+    names.map(n => `<option value="${n}"${n===prev?' selected':''}>${n}</option>`).join('');
+}
+
+function saveModel() {
+  const nameEl = document.getElementById('mdl-name');
+  const name   = nameEl.value.trim();
+  if (!name) { nameEl.focus(); nameEl.style.borderColor='#f85149'; setTimeout(()=>nameEl.style.borderColor='',1200); return; }
+  const store = getStore();
+  store[name] = readParams();
+  putStore(store);
+  refreshModelSelect();
+  document.getElementById('mdl-select').value = name;
+  nameEl.value = '';
+  flash(document.getElementById('mdl-select'), '#2ea043');
+}
+
+function loadModel(name) {
+  if (!name) return;
+  const store = getStore();
+  const p     = store[name];
+  if (!p) return;
+  applyParams(p);
+  recalc();
+  flash(document.getElementById('mdl-select'), '#388bfd');
+}
+
+function deleteModel() {
+  const sel  = document.getElementById('mdl-select');
+  const name = sel.value;
+  if (!name) return;
+  if (!confirm(`Delete model "${name}"?`)) return;
+  const store = getStore();
+  delete store[name];
+  putStore(store);
+  refreshModelSelect();
+}
+
+function simExportJSON() {
+  const sel   = document.getElementById('mdl-select');
+  const name  = sel.value;
+  const store = getStore();
+  const data  = name && store[name] ? { [name]: store[name] } : store;
+  const url   = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+  Object.assign(document.createElement('a'),{ href:url, download:(name||'homopolar_models')+'.json' }).click();
+  URL.revokeObjectURL(url);
+}
+
+function simImportJSON(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const raw  = e.target.result.replace(/^﻿/, ''); // strip BOM
+      const data = JSON.parse(raw);
+      const store = getStore();
+      const isParamsObj = 'MagsID' in data;
+      if (isParamsObj) {
+        const name = file.name.replace(/\.json$/i,'');
+        store[name] = data; putStore(store); refreshModelSelect();
+        document.getElementById('mdl-select').value = name; loadModel(name);
+      } else {
+        Object.assign(store, data); putStore(store); refreshModelSelect();
+        const first = Object.keys(data)[0];
+        if (first) { document.getElementById('mdl-select').value = first; loadModel(first); }
+      }
+      alert('✅ יובאו ' + Object.keys(data).length + ' מודלים בהצלחה');
+    } catch(err) {
+      alert('שגיאה: ' + err.message + '\n\n10 תווים ראשונים: [' + (e.target.result||'').substring(0,10) + ']');
+    }
+    ev.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function applyParams(p) {
+  const set = (id, v) => { const el=document.getElementById(id); if(el) el.value=v; };
+  set('p_MagsID',p.MagsID); set('p_MagsOD',p.MagsOD); set('p_MagsHight',p.MagsHight);
+  set('p_CoreHight',p.CoreHight); set('p_AvrgField',p.AvrgField);
+  set('p_ShldPlatW',p.ShldPlatW); set('p_ShldPlatSpacing',p.ShldPlatSpacing);
+  set('p_WireTp',p.WireTp); set('p_WireW_Dia',p.WireW_Dia); set('p_WireH_Copr',p.WireH_Copr);
+  set('p_WireLayers',p.WireLayers); set('p_WireSegs',p.WireSegs);
+  set('p_DriveMotorW',p.DriveMotorW); set('p_RPM',p.RPM); set('p_LoadAmp',p.LoadAmp);
+  set('p_Comment',p.Comment||'');
+}
+
+function flash(el, color) {
+  const was = el.style.boxShadow;
+  el.style.boxShadow = `0 0 0 2px ${color}`;
+  setTimeout(() => el.style.boxShadow = was, 800);
+}
+
+// ══════════════════════════════════════════════
+//  READ PARAMS
+// ══════════════════════════════════════════════
+function readParams() {
+  const g  = id => parseFloat(document.getElementById(id)?.value) || 0;
+  const gi = id => parseInt(document.getElementById(id)?.value)   || 0;
+  return {
+    MagsID:g('p_MagsID'), MagsOD:g('p_MagsOD'), MagsHight:g('p_MagsHight'), CoreHight:g('p_CoreHight'),
+    AvrgField:g('p_AvrgField'), ShldPlatW:g('p_ShldPlatW'), ShldPlatSpacing:g('p_ShldPlatSpacing'),
+    WireTp:gi('p_WireTp'), WireW_Dia:g('p_WireW_Dia'), WireH_Copr:g('p_WireH_Copr'),
+    WireLayers:gi('p_WireLayers'), WireSegs:gi('p_WireSegs'),
+    DriveMotorW:g('p_DriveMotorW'), RPM:g('p_RPM'), LoadAmp:g('p_LoadAmp'),
+    Comment:document.getElementById('p_Comment')?.value || '',
+  };
+}
+
+// ══════════════════════════════════════════════
+//  CALC WIRES  (CalcWires from FLATGEN.PAS)
+// ══════════════════════════════════════════════
+function calcWires(p) {
+  const shldPlatStep = p.ShldPlatW + p.ShldPlatSpacing;
+  const shieldPlates = Math.round(Math.PI * p.MagsOD / shldPlatStep);
+  const trpzOD       = p.ShldPlatW * p.MagsOD / p.MagsID;
+  const tunnelID     = (Math.PI * p.MagsID - shieldPlates * p.ShldPlatW) / shieldPlates;
+  const tunnelOD     = (Math.PI * p.MagsOD / shieldPlates) - trpzOD;
+  const idPerim      = Math.PI * p.MagsID;
+  const wireSpace    = idPerim - shieldPlates * p.ShldPlatW;
+  const turns        = Math.round(wireSpace / p.WireW_Dia);
+  const totTurns     = turns * p.WireLayers;
+  const turnMm       = (p.MagsOD - p.MagsID) + 2 * p.CoreHight;
+  const totWire      = totTurns * turnMm / 1000;
+  const segLen       = totWire / p.WireSegs;
+  let meterRes;
+  if (p.WireTp === 0) {
+    meterRes = COPPER_RESISTIVITY / (Math.PI * Math.pow(p.WireH_Copr / 2, 2));
+  } else {
+    meterRes = COPPER_RESISTIVITY / (p.WireW_Dia * p.WireH_Copr);
+  }
+  const segRes = meterRes * segLen;
+  return { shieldPlates, trpzOD, tunnelID, tunnelOD, turns, totTurns, totWire, segLen, segRes };
+}
+
+// ══════════════════════════════════════════════
+//  CALC PROCESS  (CalcProcess from FLATGEN.PAS)
+// ══════════════════════════════════════════════
+function calcProcess(p, w) {
+  const avgDiam      = p.MagsID + (p.MagsOD - p.MagsID) / 2;
+  const velocity     = (Math.PI * avgDiam / 1000) * p.RPM / 60;
+  const activeLen    = ((p.MagsOD - p.MagsID) / 2000) * w.totTurns / p.WireSegs;
+  const segIndVlt    = velocity * p.AvrgField * activeLen;
+  const segAmp       = p.LoadAmp / p.WireSegs;
+  const vDrop        = segAmp * w.segRes;
+  const segEffectiveV = segIndVlt - vDrop;
+  const segPower     = segEffectiveV * segAmp;
+  const segHeat      = Math.pow(segAmp, 2) * w.segRes;
+  const sysPower     = segPower  * p.WireSegs;
+  const sysHeat      = segHeat   * p.WireSegs;
+  const powerRatio   = p.DriveMotorW > 0 ? sysPower / p.DriveMotorW : 0;
+  return { velocity, activeLen, segIndVlt, segEffectiveV, segAmp, segPower, segHeat, vDrop, sysPower, sysHeat, powerRatio };
+}
+
+// ══════════════════════════════════════════════
+//  FORMAT HELPERS
+// ══════════════════════════════════════════════
+const fmt   = (v, d=1) => isFinite(v) ? v.toFixed(d) : '—';
+const fmtKW = v => { const kw=v/1000; return kw<5 ? kw.toFixed(1)+'kW' : kw.toFixed(0)+'kW'; };
+const fmtW  = v => v >= 1000 ? fmtKW(v) : v.toFixed(0)+'W';
+
+// ══════════════════════════════════════════════
+//  UPDATE RESULTS PANEL
+// ══════════════════════════════════════════════
+function updateResults(p, w, pr) {
+  const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
+  set('r_shieldPlates', w.shieldPlates);
+  set('r_trpz',         fmt(p.ShldPlatW,1)+' / '+fmt(w.trpzOD,1));
+  set('r_tunnelID',     fmt(w.tunnelID,1));
+  set('r_tunnelOD',     fmt(w.tunnelOD,1));
+  set('r_turns',        w.turns);
+  set('r_totTurns',     w.totTurns);
+  set('r_totWire',      fmt(w.totWire,0)+' m');
+  set('r_segLen',       fmt(w.segLen,1)+' m');
+  set('r_segRes',       fmt(w.segRes,3)+' Ω');
+  set('r_velocity',     fmt(pr.velocity,2)+' m/s');
+  set('r_activeLen',    fmt(pr.activeLen,3)+' m');
+  set('r_segIndVlt',    fmt(pr.segIndVlt,1)+' V');
+  set('r_segEffV',      fmt(pr.segEffectiveV,1)+' V');
+  set('r_segAmp',       fmt(pr.segAmp,1)+' A');
+  set('r_segPower',     fmtW(pr.segPower));
+  set('r_segHeat',      fmt(pr.segHeat,0)+' W');
+  set('r_vDrop',        fmt(pr.vDrop,1)+' V');
+  set('r_sysPower',     fmtKW(pr.sysPower));
+  set('r_sysHeat',      fmt(pr.sysHeat,0)+' W');
+  set('r_powerRatio',   fmt(pr.powerRatio,1)+'×');
+  set('st-vel',   fmt(pr.velocity,2));
+  set('st-segv',  fmt(pr.segIndVlt,1));
+  set('st-sega',  fmt(pr.segAmp,1));
+  set('st-ratio', fmt(pr.powerRatio,2));
+  set('st-plates', w.shieldPlates);
+  set('st-turns',  w.totTurns);
+  set('rpm-badge', p.RPM.toFixed(0)+' RPM');
+  const prEl = document.getElementById('r_powerRatio');
+  if (prEl) prEl.className = 'res-val text-xl font-black '+(pr.powerRatio>=2?'val-green':pr.powerRatio>=1?'val-yellow':'val-red');
+}
+
+// ══════════════════════════════════════════════
+//  PARTICLE SYSTEM (current-flow visualization)
+// ══════════════════════════════════════════════
+function spawnParticle(p, w) {
+  const plateIdx = Math.floor(Math.random() * w.shieldPlates);
+  const angle    = (plateIdx / w.shieldPlates) * Math.PI * 2 + rotAngle;
+  return { angle, t: Math.random(), speed: 0.008 + Math.random()*0.006 };
+}
+
+function updateParticles(p, w) {
+  const spawnRate = Math.min(Math.floor(p.LoadAmp / 20), 8);
+  for (let i = 0; i < spawnRate; i++) {
+    if (simParticles.length < 120) simParticles.push(spawnParticle(p, w));
+  }
+  simParticles = simParticles.filter(pt => { pt.t += pt.speed; return pt.t < 1; });
+}
+
+// ══════════════════════════════════════════════
+//  DRAW GENERATOR
+// ══════════════════════════════════════════════
+function drawGenerator(p, w) {
+  if (!genCanvas) return;
+  const W = genCanvas.width, H = genCanvas.height;
+  const cx = W/2, cy = H/2;
+  const margin = 0.85;
+  const scale  = Math.min(W,H) * margin / 2 / (p.MagsOD/2);
+  const innerR = p.MagsID/2 * scale;
+  const outerR = p.MagsOD/2 * scale;
+
+  genCtx.clearRect(0, 0, W, H);
+  const bg = genCtx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W,H));
+  bg.addColorStop(0, '#0f1923'); bg.addColorStop(1, '#0d1117');
+  genCtx.fillStyle = bg; genCtx.fillRect(0, 0, W, H);
+
+  // Outer stator ring
+  const stGrad = genCtx.createRadialGradient(cx, cy, innerR*0.9, cx, cy, outerR*1.05);
+  stGrad.addColorStop(0, '#1c2a3a'); stGrad.addColorStop(1, '#0e1520');
+  genCtx.beginPath(); genCtx.arc(cx, cy, outerR, 0, Math.PI*2);
+  genCtx.fillStyle = stGrad; genCtx.fill();
+  genCtx.strokeStyle = '#1e4a7a'; genCtx.lineWidth = 3; genCtx.stroke();
+
+  // Shield plates
+  if (w.shieldPlates > 0) {
+    const step = Math.PI*2 / w.shieldPlates;
+    for (let i = 0; i < w.shieldPlates; i++) {
+      const a = i * step;
+      genCtx.save(); genCtx.translate(cx, cy); genCtx.rotate(a);
+      const wID = Math.max(1, (p.ShldPlatW/p.MagsOD)*innerR);
+      const wOD = Math.max(1, (p.ShldPlatW/p.MagsOD)*outerR);
+      genCtx.beginPath();
+      genCtx.moveTo(-wID/2,innerR); genCtx.lineTo(wID/2,innerR);
+      genCtx.lineTo(wOD/2,outerR);  genCtx.lineTo(-wOD/2,outerR);
+      genCtx.closePath();
+      genCtx.fillStyle = '#2d5a8e'; genCtx.strokeStyle = '#4a90d9'; genCtx.lineWidth = 0.5;
+      genCtx.fill(); genCtx.stroke(); genCtx.restore();
+    }
+  }
+
+  // Winding coils
+  if (w.totTurns > 0 && w.shieldPlates > 0) {
+    const step   = Math.PI*2 / w.shieldPlates;
+    const coilR  = (innerR+outerR)/2;
+    const coilArc= step * 0.55;
+    genCtx.beginPath();
+    for (let i = 0; i < w.shieldPlates; i++) {
+      const a = i*step + step/2;
+      genCtx.moveTo(cx+(innerR+4)*Math.cos(a-coilArc/2), cy+(innerR+4)*Math.sin(a-coilArc/2));
+      genCtx.arc(cx, cy, coilR, a-coilArc/2, a+coilArc/2);
+    }
+    genCtx.strokeStyle = '#e3b341';
+    genCtx.lineWidth   = Math.max(1, scale*p.WireW_Dia/2);
+    genCtx.globalAlpha = 0.35; genCtx.stroke(); genCtx.globalAlpha = 1;
+  }
+
+  // Rotor (rotating)
+  genCtx.save(); genCtx.translate(cx, cy); genCtx.rotate(rotAngle);
+  const rGrad = genCtx.createRadialGradient(0,0,0,0,0,innerR*0.95);
+  rGrad.addColorStop(0,'#1a3a5c'); rGrad.addColorStop(0.7,'#0f2440'); rGrad.addColorStop(1,'#0a1a30');
+  genCtx.beginPath(); genCtx.arc(0,0,innerR*0.95,0,Math.PI*2);
+  genCtx.fillStyle = rGrad; genCtx.strokeStyle = '#3b82f6'; genCtx.lineWidth = 2;
+  genCtx.fill(); genCtx.stroke();
+  const numSpokes = Math.min(8, Math.max(4, Math.floor(p.MagsID/20)));
+  for (let i = 0; i < numSpokes; i++) {
+    const a = (i/numSpokes)*Math.PI*2;
+    genCtx.beginPath();
+    genCtx.moveTo(innerR*0.12*Math.cos(a), innerR*0.12*Math.sin(a));
+    genCtx.lineTo(innerR*0.82*Math.cos(a), innerR*0.82*Math.sin(a));
+    genCtx.strokeStyle = '#60a5fa'; genCtx.lineWidth = Math.max(1, innerR*0.03); genCtx.stroke();
+  }
+  genCtx.beginPath(); genCtx.arc(0,0,innerR*0.95,0,Math.PI*2);
+  genCtx.strokeStyle = 'rgba(147,197,253,0.3)'; genCtx.lineWidth = 4; genCtx.stroke();
+  genCtx.restore();
+
+  // Hub
+  const hubR = Math.max(6, innerR*0.08);
+  const hGrad = genCtx.createRadialGradient(cx-hubR*.3,cy-hubR*.3,0,cx,cy,hubR);
+  hGrad.addColorStop(0,'#fcd34d'); hGrad.addColorStop(1,'#92400e');
+  genCtx.beginPath(); genCtx.arc(cx,cy,hubR,0,Math.PI*2);
+  genCtx.fillStyle = hGrad; genCtx.strokeStyle = '#f59e0b'; genCtx.lineWidth = 1.5;
+  genCtx.fill(); genCtx.stroke();
+
+  // Current flow particles
+  if (w.shieldPlates > 0) {
+    const step = Math.PI*2 / w.shieldPlates;
+    simParticles.forEach(pt => {
+      const r = innerR + pt.t*(outerR-innerR);
+      const x = cx + r*Math.cos(pt.angle + rotAngle*0.2);
+      const y = cy + r*Math.sin(pt.angle + rotAngle*0.2);
+      const heat  = Math.min(1, p.LoadAmp/500);
+      const alpha = (1-pt.t)*0.8;
+      genCtx.beginPath(); genCtx.arc(x,y,2.5,0,Math.PI*2);
+      genCtx.fillStyle = `rgba(${Math.round(255*heat)},${Math.round(180*(1-heat))},${Math.round(255*(1-heat))},${alpha})`;
+      genCtx.fill();
+    });
+  }
+
+  // Outer glow
+  genCtx.beginPath(); genCtx.arc(cx,cy,outerR,0,Math.PI*2);
+  genCtx.strokeStyle = isRunning ? 'rgba(56,139,253,0.4)' : 'rgba(56,139,253,0.15)';
+  genCtx.lineWidth   = isRunning ? 6 : 3;
+  genCtx.shadowColor = '#388bfd'; genCtx.shadowBlur = isRunning ? 20 : 5;
+  genCtx.stroke(); genCtx.shadowBlur = 0;
+
+  // Labels
+  genCtx.fillStyle = 'rgba(100,120,140,0.8)';
+  genCtx.font = '11px monospace'; genCtx.textAlign = 'center';
+  genCtx.fillText(`ID: ${p.MagsID}mm`, cx+innerR*0.5, cy-4);
+  genCtx.fillText(`OD: ${p.MagsOD}mm`, cx, cy-outerR-8);
+  if (isRunning) {
+    genCtx.font = 'bold 12px monospace'; genCtx.fillStyle = '#60a5fa';
+    genCtx.fillText(`${p.RPM.toFixed(0)} RPM`, cx, cy+hubR+18);
+  }
+}
+
+// ══════════════════════════════════════════════
+//  ANIMATION LOOP
+// ══════════════════════════════════════════════
+let simLastTime = 0;
+function drawFrame(ts = 0) {
+  const dt = Math.min((ts - simLastTime)/1000, 0.05);
+  simLastTime = ts;
+
+  const p  = readParams();
+  const w  = calcWires(p);
+  const pr = calcProcess(p, w);
+  lastCalc = { p, w, pr };
+
+  if (isRunning && p.RPM > 0) {
+    rotAngle += (2*Math.PI*p.RPM/60) * dt;
+    updateParticles(p, w);
+  } else {
+    simParticles = [];
+  }
+
+  drawGenerator(p, w);
+  if (document.getElementById('chk-live')?.checked || isRunning) updateResults(p, w, pr);
+
+  animFrame = requestAnimationFrame(drawFrame);
+}
+
+// ══════════════════════════════════════════════
+//  RUN / STOP CONTROLS
+// ══════════════════════════════════════════════
+function startSim() {
+  isRunning = true;
+  document.getElementById('btn-run').style.display  = 'none';
+  document.getElementById('btn-stop').style.display = 'block';
+  document.getElementById('status-badge').textContent = '● RUNNING';
+  document.getElementById('status-badge').className   = 'badge badge-green animate-pulse';
+}
+
+function stopSim() {
+  isRunning = false; simParticles = [];
+  document.getElementById('btn-run').style.display  = 'block';
+  document.getElementById('btn-stop').style.display = 'none';
+  document.getElementById('status-badge').textContent = '● READY';
+  document.getElementById('status-badge').className   = 'badge badge-green';
+}
+
+function recalc() {
+  const p = readParams(); const w = calcWires(p); const pr = calcProcess(p, w);
+  updateResults(p, w, pr);
+}
+
+// Live recalc on any param change
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.param-input').forEach(el => {
+    el.addEventListener('input', () => {
+      if (document.getElementById('chk-live')?.checked) recalc();
+    });
+  });
+  // Alt+R shortcut: run/stop simulator
+  document.addEventListener('keydown', e => {
+    if (e.altKey && e.key === 'r') { e.preventDefault(); isRunning ? stopSim() : startSim(); }
+  });
+});
+
+/* ─────────────────────────────────────────────────
+   APP SHELL — TAB SWITCHING
+───────────────────────────────────────────────── */
+function switchTab(tab) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.app-tab').forEach(b => b.classList.toggle('active', b.dataset.panel === tab));
+  document.getElementById(`panel-${tab}`).classList.add('active');
+  if (tab === 'sim') setTimeout(initSimCanvas, 40);
+}
+
+/* ─────────────────────────────────────────────────
+   BOOT
+───────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', async () => {
+  // Init Supabase + Realtime
+  if (window.supabase) {
+    _supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+    // Kanban sync (row id=1)
+    _supa.channel('heep-kanban')
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'heep_board', filter: 'id=eq.1'
+      }, payload => {
+        if (payload.new?.state) KB.applyRemote(payload.new.state);
+      })
+      .subscribe();
+    // Models sync (row id=2)
+    _supa.channel('heep-models')
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'heep_board', filter: 'id=eq.2'
+      }, payload => {
+        if (payload.new?.state && Object.keys(payload.new.state).length > 0) {
+          localStorage.setItem(MDL_KEY, JSON.stringify(payload.new.state));
+          refreshModelSelect();
+        }
+      })
+      .subscribe();
+  }
+
+  await KB.init();
+  KB.render();
+});
+</script>
+</body>
+</html>
