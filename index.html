@@ -178,7 +178,7 @@
 
     .monday-col-hdr {
       display: grid;
-      grid-template-columns: 1fr 90px 105px 95px 120px;
+      grid-template-columns: 1fr 90px 105px 95px 110px 120px;
       padding: 0 14px; height: 30px; align-items: center;
       background: var(--surface2);
       border-bottom: 1px solid var(--border);
@@ -190,7 +190,7 @@
 
     .monday-row {
       display: grid;
-      grid-template-columns: 1fr 90px 105px 95px 120px;
+      grid-template-columns: 1fr 90px 105px 95px 110px 120px;
       padding: 0 14px; min-height: 44px; align-items: center;
       border-bottom: 1px solid var(--border);
       transition: background .1s; position: relative;
@@ -622,7 +622,8 @@
       }
       .monday-row-tags,
       .monday-row-pri-cell,
-      .monday-row-date-cell { display: none; }
+      .monday-row-date-cell,
+      .monday-row-meeting-cell { display: none; }
       .monday-row-actions { display: flex !important; position: static;
         transform: none; box-shadow: none; background: transparent;
         padding: 0; margin-right: 4px; }
@@ -1068,6 +1069,7 @@ const KB = (() => {
         <div>אחראי</div>
         <div>עדיפות</div>
         <div>תאריך</div>
+        <div>פגישה</div>
         <div>תגיות</div>
       </div>
       <div class="monday-rows" id="col-${col.id}"
@@ -1131,11 +1133,11 @@ const KB = (() => {
         <div class="monday-row-name">
           <div class="monday-row-title">${esc(c.title)}</div>
           ${c.desc ? `<div class="monday-row-sub">${esc(c.desc)}</div>` : ''}
-          ${c.meeting ? `<div style="margin-top:3px">${meetingBadge(c.meeting)}</div>` : ''}
         </div>
         <div class="monday-row-members">${avatars}</div>
         <div class="monday-row-pri-cell"><span class="monday-pri-badge ${priCls}">${priTxt}</span></div>
         <div class="monday-row-date-cell">${dateBadge}</div>
+        <div class="monday-row-meeting-cell">${meetingBadge(c.meeting)}</div>
         <div class="monday-row-tags">${tags}</div>
         <div class="monday-row-actions">
           <button class="card-action-btn" onclick="KB.openModal(null,${c.id})" title="עריכה">✏️</button>
