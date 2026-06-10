@@ -1,11 +1,13 @@
-// Self-destructing service worker — clears cache and unregisters
+// Minimal SW — enables Web Push / local notifications on iOS PWA
 self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', e => {
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL('/TeamBoard/', self.location.origin).href;
   e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
-      .then(() => self.registration.unregister())
-      .then(() => self.clients.matchAll())
-      .then(clients => clients.forEach(c => c.navigate(c.url)))
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const win = list.find(w => w.url.startsWith(url));
+      return win ? win.focus() : clients.openWindow(url);
+    })
   );
 });

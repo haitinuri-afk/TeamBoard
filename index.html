@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <script>
     // Force reload when app version changes
-    const _V = '20260609-004';
+    const _V = '20260610-001';
     if (localStorage.getItem('_hv') !== _V) {
       const first = !localStorage.getItem('_hv');
       localStorage.setItem('_hv', _V);
@@ -666,6 +666,7 @@
     <div style="display:flex;gap:8px">
       <button class="btn btn-ghost"   onclick="KB.exportJSON()">⬇ ייצוא JSON</button>
       <button class="btn btn-ghost"   onclick="KB.exportICS()">📅 ייצוא יומן</button>
+      <button class="btn btn-ghost"   id="notif-btn" onclick="KB.requestNotif()">🔔 התראות</button>
       <button class="btn btn-primary" onclick="KB.openModal()">＋ כרטיס חדש</button>
     </div>
   </div>
@@ -976,6 +977,8 @@ const KB = (() => {
   let state      = { cards:[], nextId:1 };
   let editId     = null, selPri = 'medium', selMembers = [], dragId = null;
   let filterMem  = null; // active member filter (null = show all)
+  let _ignoreNext = false;  // suppress notification for own updates
+  let _badgeCount = 0;
 
   async function load() {
     // Try Supabase first
@@ -1001,10 +1004,12 @@ const KB = (() => {
   function save() {
     localStorage.setItem('tb_state', JSON.stringify(state));
     if (_supa) {
-      _supa.from('heep_board')
-        .update({ state: state, updated_at: new Date().toISOString() })
-        .eq('id', 1)
-        .catch(() => {});
+      _ignoreNext = true;
+      Promise.resolve(
+        _supa.from('heep_board')
+          .update({ state: state, updated_at: new Date().toISOString() })
+          .eq('id', 1)
+      ).catch(() => {});
     }
   }
 
@@ -1012,6 +1017,41 @@ const KB = (() => {
     state = newState;
     localStorage.setItem('tb_state', JSON.stringify(state));
     render();
+    if (_ignoreNext) { _ignoreNext = false; return; }
+    _showUpdateNotif();
+  }
+
+  function _showUpdateNotif() {
+    _badgeCount++;
+    if (navigator.setAppBadge) navigator.setAppBadge(_badgeCount).catch(()=>{});
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const opts = {
+      body: 'לוח המשימות עודכן על ידי משתמש אחר',
+      icon: '/TeamBoard/apple-touch-icon-v2.png',
+      badge: '/TeamBoard/apple-touch-icon-v2.png',
+      tag: 'heep-update',
+      renotify: true,
+    };
+    if (navigator.serviceWorker?.controller) {
+      navigator.serviceWorker.ready
+        .then(reg => reg.showNotification('HEEP — עדכון 🔔', opts))
+        .catch(() => new Notification('HEEP — עדכון 🔔', opts));
+    } else {
+      try { new Notification('HEEP — עדכון 🔔', opts); } catch(e) {}
+    }
+  }
+
+  function requestNotif() {
+    if (!('Notification' in window)) { alert('הדפדפן לא תומך בהתראות'); return; }
+    Notification.requestPermission().then(p => {
+      const btn = document.getElementById('notif-btn');
+      if (p === 'granted') {
+        btn.textContent = '🔔 התראות פועלות';
+        btn.style.color = '#10b981';
+      } else {
+        btn.textContent = '🔕 התראות חסומות';
+      }
+    });
   }
 
   function seed() {
@@ -1360,7 +1400,7 @@ const KB = (() => {
 
   return { init:load, render, openModal, closeModal, selectPri, selectMem, toggleMem,
            save:saveFn, del, dragStart, dragEnd, dragOver, dragLeave, drop,
-           exportJSON, exportICS, addToCalendar, toggleFilter, applyRemote };
+           exportJSON, exportICS, addToCalendar, toggleFilter, applyRemote, requestNotif };
 })();
 
 
@@ -1918,6 +1958,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await KB.init();
   KB.render();
+
+  // Update notification button label if already granted
+  if ('Notification' in window) {
+    const btn = document.getElementById('notif-btn');
+    if (btn) {
+      if (Notification.permission === 'granted') {
+        btn.textContent = '🔔 התראות פועלות';
+        btn.style.color = '#10b981';
+      } else if (Notification.permission === 'denied') {
+        btn.textContent = '🔕 התראות חסומות';
+      }
+    }
+  }
+
+  // Clear badge when user opens / returns to the app
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      if (navigator.clearAppBadge) navigator.clearAppBadge().catch(()=>{});
+    }
+  });
 });
 </script>
 </body>
