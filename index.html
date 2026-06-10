@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <script>
     // Force reload when app version changes
-    const _V = '20260610-003';
+    const _V = '20260610-004';
     if (localStorage.getItem('_hv') !== _V) {
       const first = !localStorage.getItem('_hv');
       localStorage.setItem('_hv', _V);
@@ -1020,6 +1020,18 @@ const KB = (() => {
     }
   }
 
+  function checkExpiredMeetings() {
+    const now = new Date();
+    let changed = false;
+    state.cards.forEach(c => {
+      if (c.col === 'meetings' && c.meeting && new Date(c.meeting) < now) {
+        c.col = 'done';
+        changed = true;
+      }
+    });
+    if (changed) { save(); render(); }
+  }
+
   function applyRemote(newState) {
     state = newState;
     localStorage.setItem('tb_state', JSON.stringify(state));
@@ -1407,7 +1419,7 @@ const KB = (() => {
 
   return { init:load, render, openModal, closeModal, selectPri, selectMem, toggleMem,
            save:saveFn, del, dragStart, dragEnd, dragOver, dragLeave, drop,
-           exportJSON, exportICS, addToCalendar, toggleFilter, applyRemote, requestNotif };
+           exportJSON, exportICS, addToCalendar, toggleFilter, applyRemote, requestNotif, checkExpiredMeetings };
 })();
 
 
@@ -1965,6 +1977,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await KB.init();
   KB.render();
+  KB.checkExpiredMeetings();
+  setInterval(KB.checkExpiredMeetings, 60_000);
 
   // Update notification button label if already granted
   if ('Notification' in window) {
