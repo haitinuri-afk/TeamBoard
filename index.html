@@ -10,11 +10,19 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <script>
     // Force reload when app version changes
-    const _V = '20260610-002';
+    const _V = '20260610-003';
     if (localStorage.getItem('_hv') !== _V) {
       const first = !localStorage.getItem('_hv');
       localStorage.setItem('_hv', _V);
-      if (!first) window.location.reload(true);
+      if (!first) {
+        // Force a cache-busting navigation (reload(true) is ignored by iOS Safari)
+        const url = location.pathname + '?_v=' + _V;
+        location.replace(url);
+      }
+    }
+    // Strip the cache-bust param from the URL without reloading
+    if (location.search.startsWith('?_v=')) {
+      history.replaceState(null, '', location.pathname);
     }
     if ('serviceWorker' in navigator)
       navigator.serviceWorker.register('sw.js');
