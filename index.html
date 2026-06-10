@@ -665,6 +665,7 @@
     <h2 class="kanban-title">📋 לוח משימות</h2>
     <div style="display:flex;gap:8px">
       <button class="btn btn-ghost"   onclick="KB.exportJSON()">⬇ ייצוא JSON</button>
+      <button class="btn btn-ghost"   onclick="KB.exportICS()">📅 ייצוא יומן</button>
       <button class="btn btn-primary" onclick="KB.openModal()">＋ כרטיס חדש</button>
     </div>
   </div>
@@ -1136,7 +1137,10 @@ const KB = (() => {
           <div class="monday-row-title">${esc(c.title)}</div>
           ${c.desc ? `<div class="monday-row-sub">${esc(c.desc)}</div>` : ''}
         </div>
-        <div class="monday-row-meeting-cell">${meetingBadge(c.meeting)}</div>
+        <div class="monday-row-meeting-cell" style="display:flex;align-items:center;gap:4px">
+          ${meetingBadge(c.meeting)}
+          ${c.meeting ? `<button class="card-action-btn" style="flex-shrink:0" onclick="KB.addToCalendar(${c.id})" title="הוסף ליומן">🗓</button>` : ''}
+        </div>
         <div class="monday-row-members">${avatars}</div>
         <div class="monday-row-pri-cell"><span class="monday-pri-badge ${priCls}">${priTxt}</span></div>
         <div class="monday-row-date-cell">${dateBadge}</div>
@@ -1296,8 +1300,67 @@ const KB = (() => {
     a.click();
   }
 
+  function toICSDate(dtStr) {
+    const d = new Date(dtStr);
+    const pad = n => String(n).padStart(2,'0');
+    return d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) +
+           'T' + pad(d.getHours()) + pad(d.getMinutes()) + '00';
+  }
+
+  function cardToVEVENT(c) {
+    if (!c.meeting) return '';
+    const start = toICSDate(c.meeting);
+    const end   = toICSDate(new Date(new Date(c.meeting).getTime() + 60*60*1000).toISOString());
+    const desc  = (c.desc||'').replace(/\n/g,'\\n');
+    return [
+      'BEGIN:VEVENT',
+      `UID:heep-${c.id}@heep`,
+      `DTSTART:${start}`,
+      `DTEND:${end}`,
+      `SUMMARY:${c.title}`,
+      desc ? `DESCRIPTION:${desc}` : '',
+      'END:VEVENT',
+    ].filter(Boolean).join('\r\n');
+  }
+
+  function exportICS() {
+    const events = state.cards.filter(c => c.meeting).map(cardToVEVENT).join('\r\n');
+    if (!events) { alert('אין פגישות לייצוא'); return; }
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//HEEP//TeamBoard//HE',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      events,
+      'END:VCALENDAR',
+    ].join('\r\n');
+    const a = Object.assign(document.createElement('a'), {
+      href:     URL.createObjectURL(new Blob([ics],{type:'text/calendar'})),
+      download: 'heep-meetings.ics',
+    });
+    a.click();
+  }
+
+  function addToCalendar(id) {
+    const c = state.cards.find(x => x.id === id);
+    if (!c || !c.meeting) return;
+    const ics = [
+      'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//HEEP//TeamBoard//HE',
+      'CALSCALE:GREGORIAN','METHOD:PUBLISH',
+      cardToVEVENT(c),
+      'END:VCALENDAR',
+    ].join('\r\n');
+    const a = Object.assign(document.createElement('a'), {
+      href:     URL.createObjectURL(new Blob([ics],{type:'text/calendar'})),
+      download: `heep-${c.id}.ics`,
+    });
+    a.click();
+  }
+
   return { init:load, render, openModal, closeModal, selectPri, selectMem, toggleMem,
-           save:saveFn, del, dragStart, dragEnd, dragOver, dragLeave, drop, exportJSON, toggleFilter, applyRemote };
+           save:saveFn, del, dragStart, dragEnd, dragOver, dragLeave, drop,
+           exportJSON, exportICS, addToCalendar, toggleFilter, applyRemote };
 })();
 
 
